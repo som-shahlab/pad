@@ -29,7 +29,6 @@ entrypoints @ file:///home/conda/feedstock_root/build_artifacts/entrypoints_1643
 exceptiongroup @ file:///home/conda/feedstock_root/build_artifacts/exceptiongroup_1678703645500/work
 executing @ file:///home/conda/feedstock_root/build_artifacts/executing_1667317341051/work
 fastjsonschema @ file:///home/conda/feedstock_root/build_artifacts/python-fastjsonschema_1684761244589/work/dist
--e git+https://github.com/som-shahlab/femr.git@958556090f23c44bde1f050264039d0791c5009e#egg=femr
 filelock==3.12.2
 flit_core @ file:///home/conda/feedstock_root/build_artifacts/flit-core_1684084314667/work/source/flit_core
 fonttools==4.39.4

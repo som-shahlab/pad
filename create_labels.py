@@ -15,55 +15,67 @@ import numpy as np
 from loguru import logger
 
 
-class PADLabeler(femr.labelers.TimeHorizonEventLabeler):
-    def __init__(self, ontology, time_horizon):
-        self.time_horizon = time_horizon
-        self.pad_codes = list(
+class PADSurvivalLabeler(femr.labelers.Labeler):
+    def __init__(self, ontology):
+        self.required_days = 365
+        self.codes = list(
             femr.labelers.omop.map_omop_concept_codes_to_femr_codes(
-                ontology, {"SNOMED/840580004"}, is_ontology_expansion=True
+                ontology, {"SNOMED/70995007"}, is_ontology_expansion=True
             )
         )
-
-        super().__init__()
-
-    def get_prediction_times(self, patient):
-        outpatient_visit_times = set()
-
-        first_non_birth = None
-
-        birth = patient.events[0].start
-
+        
+    def label(self, patient):
+        birth_date = datetime.datetime.combine(patient.events[0].start.date(), datetime.time.min)
+        censor_time = patient.events[-1].start
+        
+        possible_times = []
+        first_history = None
+        first_code = None
+        
         for event in patient.events:
-            if event.start != birth and first_non_birth is None:
-                first_non_birth = event.start
 
-            if event.code in self.pad_codes:
-                break
+            if first_history is None and (event.start - birth_date) > datetime.timedelta(days=10):
+                first_history = event.start
+            
+            is_event = event.code in self.codes
+            if first_code is None and is_event:
+                first_code = event.start
 
-            if (
-                event.code == "Visit/OP"
-                and first_non_birth is not None
-                and (event.start - first_non_birth).days > 365
-            ):
-                outpatient_visit_times.add(event.start - datetime.timedelta(days=1))
+            if not event.code.startswith("SNOMED/") or event.value is not None:
+                continue
 
-        return sorted(list(outpatient_visit_times))
+            if event.start.minute != 59 or event.start.hour != 23:
+                continue
 
-    def get_time_horizon(self):
-        return self.time_horizon
+            if event.start.year < 2010:
+                continue
 
-    def allow_same_time_labels(self):
-        return False
+            possib_time = event.start
 
-    def get_outcome_times(self, patient):
-        outcome_times = set()
+            if possib_time == censor_time:
+                continue
+            
+            if first_history is not None and (possib_time - first_history) > datetime.timedelta(days=self.required_days):
+                possible_times.append(possib_time)
+        
+        possible_times = [a for a in possible_times if first_code is None or a < first_code]
+        if len(possible_times) == 0:
+            return []
+        
+        selected_time = random.choice(possible_times)
+        is_censored = first_code is None
+        
+        if is_censored:
+            event_time = censor_time
+        else:
+            event_time = first_code
 
-        for event in patient.events:
-            if event.code in self.pad_codes:
-                outcome_times.add(event.start)
-
-        return sorted(list(outcome_times))
-
+        survival_value = femr.labelers.SurvivalValue(time_to_event=event_time - selected_time, is_censored=is_censored)
+        result = [femr.labelers.Label(time=selected_time, value=survival_value)]
+        return result
+    
+    def get_labeler_type(self):
+        return "survival"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run femr labeling")
@@ -110,6 +122,9 @@ if __name__ == "__main__":
     PATH_TO_SAVE_SUBSAMPLE_LABELED_PATIENTS: str = os.path.join(
         PATH_TO_OUTPUT_DIR, "subsample_labeled_patients.csv"
     )
+    PATH_TO_SAVE_BINARY_LABELED_PATIENTS: str = os.path.join(
+        PATH_TO_OUTPUT_DIR, "binary_subsample_labeled_patients.csv"
+    )
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
 
     # Load PatientDatabase + Ontology
@@ -118,11 +133,8 @@ if __name__ == "__main__":
     ontology = database.get_ontology()
     logger.info(f"Finish | Load PatientDatabase")
 
-    labeler = PADLabeler(
+    labeler = PADSurvivalLabeler(
         ontology,
-        femr.labelers.TimeHorizon(
-            datetime.timedelta(minutes=1), datetime.timedelta(days=60)
-        ),
     )
 
     logger.info(f"Start | Label")
@@ -144,10 +156,26 @@ if __name__ == "__main__":
         "LabeledPatient stats:\n"
         f"Total # of patients = {labeled_patients.get_num_patients()}\n"
         f"Total # of labels = {labeled_patients.get_num_labels()}\n"
-        f"Total # of positives = {np.sum(labeled_patients.as_numpy_arrays()[1])}"
+        f"Total # of positives = {np.sum(labeled_patients.as_numpy_arrays()[1][:, 1])}"
     )
 
-    subsampled = femr.labelers.subsample_to_prevalence(labeled_patients, 0.2, seed=97)
+    total_uncensored = np.sum(labeled_patients.as_numpy_arrays()[1][:, 1] == 0)
+    total_censored = np.sum(labeled_patients.as_numpy_arrays()[1][:, 1] == 1)
+    total_censored_to_sample = 4 * total_uncensored
+
+    label_pids, label_values, label_times = labeled_patients.as_numpy_arrays()
+
+    print(label_values.dtype)
+
+    random_numbers = np.random.random(size=(len(label_pids),))
+
+    mask = np.logical_or(random_numbers < (total_censored_to_sample / total_censored), label_values[:, 1] == 0)
+
+    sampled_label_pids = label_pids[mask]
+    sampled_label_values = label_values[mask, :]
+    sampled_label_times = label_times[mask]
+
+    subsampled = femr.labelers.LabeledPatients.load_from_numpy(sampled_label_pids, sampled_label_values, sampled_label_times, "survival")
 
     subsampled.save(PATH_TO_SAVE_SUBSAMPLE_LABELED_PATIENTS)
     logger.info("Finish | Subsampled label patients")
@@ -155,7 +183,31 @@ if __name__ == "__main__":
         "Subsampled LabeledPatient stats:\n"
         f"Total # of patients = {subsampled.get_num_patients()}\n"
         f"Total # of labels = {subsampled.get_num_labels()}\n"
-        f"Total # of positives = {np.sum(subsampled.as_numpy_arrays()[1])}"
+        f"Total # of positives = {np.sum(subsampled.as_numpy_arrays()[1][:, 1])}"
+    )
+
+    logger.info("Convert to binary")
+
+    within_time_range = sampled_label_values[:, 0] <= 365 * 24 * 60
+    is_censor = sampled_label_values[:, 1] == 1
+
+    mask = ~np.logical_and(is_censor, within_time_range)
+
+    is_true = np.logical_and(~is_censor, within_time_range)
+    
+    binary_label_pids = sampled_label_pids[mask]
+    binary_label_values = is_true[mask]
+    binary_label_times = sampled_label_times[mask]
+
+    binary = femr.labelers.LabeledPatients.load_from_numpy(binary_label_pids, binary_label_values, binary_label_times, "boolean")
+
+    binary.save(PATH_TO_SAVE_BINARY_LABELED_PATIENTS)
+    logger.info("Finish | Subsampled label patients")
+    logger.info(
+        "Subsampled LabeledPatient stats:\n"
+        f"Total # of patients = {binary.get_num_patients()}\n"
+        f"Total # of labels = {binary.get_num_labels()}\n"
+        f"Total # of positives = {np.sum(binary.as_numpy_arrays()[1])}"
     )
 
     logger.info("Done!")

@@ -15,13 +15,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    task_batches = os.path.join(args.path_to_output_dir, "binary_motor_batches")
-    labels = os.path.join(args.path_to_output_dir, "binary_subsample_labeled_patients.csv")
+    task_batches = os.path.join(args.path_to_output_dir, "tte_motor_batches")
+    labels = os.path.join(args.path_to_output_dir, "subsample_labeled_patients.csv")
 
     command = f"clmbr_create_batches {task_batches} --data_path {args.path_to_database} --task labeled_patients --labeled_patients_path {labels} --val_start 70 --dictionary_path {args.path_to_motor}/dictionary --is_hierarchical --batch_size 262144"
     os.system(command)
 
-    motor_results = os.path.join(args.path_to_output_dir, "binary_motor_results")
+    motor_results = os.path.join(args.path_to_output_dir, "tte_motor_results")
 
     command = f"clmbr_train_linear_probe {motor_results} --data_path {args.path_to_database} --model_dir {args.path_to_motor}/model --batches_path {task_batches}"
     os.system(command)

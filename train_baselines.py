@@ -9,7 +9,6 @@ from typing import List, Optional, Tuple
 import femr
 import femr.datasets
 import lightgbm as ltb
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import sklearn.linear_model
@@ -23,6 +22,7 @@ XGB_PARAMS = {
     "max_depth": [3, 6, -1],
     "learning_rate": [0.02, 0.1, 0.5],
     "num_leaves": [10, 25, 100],
+    "verbose": [-1],
 }
 
 LR_PARAMS = {
@@ -44,7 +44,6 @@ def tune_hyperparams(
         model,
         params,
         n_jobs=6,
-        verbose=1,
         cv=PredefinedSplit(test_fold=test_fold),
         refit=False,
         scoring="roc_auc",
@@ -62,7 +61,6 @@ def main(args):
     path_to_log_file: str = os.path.join(args.path_to_output_dir, "baselines_info.log")
     if os.path.exists(path_to_log_file):
         os.remove(path_to_log_file)
-    logger.add(path_to_log_file, level="INFO")  # connect logger to file
     logger.info(f"Loading patient database from: {PATH_TO_PATIENT_DATABASE}")
     logger.info(f"Saving output to: {args.path_to_output_dir}")
 
