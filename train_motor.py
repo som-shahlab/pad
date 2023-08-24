@@ -18,7 +18,7 @@ if __name__ == "__main__":
     task_batches = os.path.join(args.path_to_output_dir, "binary_motor_batches")
     labels = os.path.join(args.path_to_output_dir, "binary_subsample_labeled_patients.csv")
 
-    command = f"clmbr_create_batches {task_batches} --data_path {args.path_to_database} --task labeled_patients --labeled_patients_path {labels} --val_start 70 --dictionary_path {args.path_to_motor}/dictionary --is_hierarchical --batch_size 262144"
+    command = f"clmbr_create_batches {task_batches} --data_path {args.path_to_database} --task labeled_patients --labeled_patients_path {labels} --val_start 70 --dictionary_path {args.path_to_motor}/dictionary --is_hierarchical --batch_size 65536"
     os.system(command)
 
     motor_results = os.path.join(args.path_to_output_dir, "binary_motor_results")

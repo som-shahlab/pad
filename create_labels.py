@@ -18,11 +18,6 @@ from loguru import logger
 class PADSurvivalLabeler(femr.labelers.Labeler):
     def __init__(self, ontology):
         self.required_days = 365
-        self.codes = list(
-            femr.labelers.omop.map_omop_concept_codes_to_femr_codes(
-                ontology, {"SNOMED/70995007"}, is_ontology_expansion=True
-            )
-        )
         
     def label(self, patient):
         birth_date = datetime.datetime.combine(patient.events[0].start.date(), datetime.time.min)
@@ -31,32 +26,40 @@ class PADSurvivalLabeler(femr.labelers.Labeler):
         possible_times = []
         first_history = None
         first_code = None
+        has_ibd_code = False
         
         for event in patient.events:
 
             if first_history is None and (event.start - birth_date) > datetime.timedelta(days=10):
                 first_history = event.start
             
-            is_event = event.code in self.codes
-            if first_code is None and is_event:
+            if event.omop_table == 'condition_occurrence' and event.source_code == 'K83.01':
                 first_code = event.start
 
-            if not event.code.startswith("SNOMED/") or event.value is not None:
+            if event.omop_table == 'condition_occurrence' and (
+                event.source_code.startswith('K50') or event.source_code.startswith('K51')
+            ):
+                has_ibd_code = True
+            
+            if not has_ibd_code:
                 continue
 
-            if event.start.minute != 59 or event.start.hour != 23:
+            if not event.code.startswith('Visit/'):
                 continue
 
-            if event.start.year < 2010:
-                continue
-
-            possib_time = event.start
+            possib_time = event.end
 
             if possib_time == censor_time:
                 continue
+
+            if True:
+                if event.start.year < 2010:
+                    continue
             
-            if first_history is not None and (possib_time - first_history) > datetime.timedelta(days=self.required_days):
-                possible_times.append(possib_time)
+                if first_history is None or (possib_time - first_history) <= datetime.timedelta(days=self.required_days):
+                    continue
+
+            possible_times.append(possib_time)
         
         possible_times = [a for a in possible_times if first_code is None or a < first_code]
         if len(possible_times) == 0:
@@ -156,7 +159,7 @@ if __name__ == "__main__":
         "LabeledPatient stats:\n"
         f"Total # of patients = {labeled_patients.get_num_patients()}\n"
         f"Total # of labels = {labeled_patients.get_num_labels()}\n"
-        f"Total # of positives = {np.sum(labeled_patients.as_numpy_arrays()[1][:, 1])}"
+        f"Total # of uncensored = {np.sum(1 - labeled_patients.as_numpy_arrays()[1][:, 1])}"
     )
 
     total_uncensored = np.sum(labeled_patients.as_numpy_arrays()[1][:, 1] == 0)
@@ -183,7 +186,7 @@ if __name__ == "__main__":
         "Subsampled LabeledPatient stats:\n"
         f"Total # of patients = {subsampled.get_num_patients()}\n"
         f"Total # of labels = {subsampled.get_num_labels()}\n"
-        f"Total # of positives = {np.sum(subsampled.as_numpy_arrays()[1][:, 1])}"
+        f"Total # of uncensored = {np.sum(1 - subsampled.as_numpy_arrays()[1][:, 1])}"
     )
 
     logger.info("Convert to binary")
