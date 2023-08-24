@@ -15,7 +15,7 @@ import numpy as np
 from loguru import logger
 
 
-class PADSurvivalLabeler(femr.labelers.Labeler):
+class PSCSurvivalLabeler(femr.labelers.Labeler):
     def __init__(self, ontology):
         self.required_days = 365
         
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     ontology = database.get_ontology()
     logger.info(f"Finish | Load PatientDatabase")
 
-    labeler = PADSurvivalLabeler(
+    labeler = PSCSurvivalLabeler(
         ontology,
     )
 
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     else:
         num_patients = None
 
-    if False:
+    if True:
         labeled_patients = labeler.apply(
             path_to_patient_database=PATH_TO_PATIENT_DATABASE,
             num_threads=NUM_THREADS,
