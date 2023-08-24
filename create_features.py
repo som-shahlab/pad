@@ -44,7 +44,7 @@ if __name__ == "__main__":
     logger.info(f"# of threads: {NUM_THREADS}")
 
     labeled_patients = femr.labelers.load_labeled_patients(
-        os.path.join(PATH_TO_OUTPUT_DIR, "subsample_labeled_patients.csv")
+        os.path.join(PATH_TO_OUTPUT_DIR, "binary_labeled_patients.csv")
     )
 
     # Lets use both age and count featurizer

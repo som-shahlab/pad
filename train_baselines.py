@@ -43,7 +43,7 @@ def tune_hyperparams(
     clf = GridSearchCV(
         model,
         params,
-        n_jobs=6,
+        n_jobs=num_threads,
         cv=PredefinedSplit(test_fold=test_fold),
         refit=False,
         scoring="roc_auc",

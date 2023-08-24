@@ -122,11 +122,8 @@ if __name__ == "__main__":
     PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(
         PATH_TO_OUTPUT_DIR, "labeled_patients.csv"
     )
-    PATH_TO_SAVE_SUBSAMPLE_LABELED_PATIENTS: str = os.path.join(
-        PATH_TO_OUTPUT_DIR, "subsample_labeled_patients.csv"
-    )
     PATH_TO_SAVE_BINARY_LABELED_PATIENTS: str = os.path.join(
-        PATH_TO_OUTPUT_DIR, "binary_subsample_labeled_patients.csv"
+        PATH_TO_OUTPUT_DIR, "binary_labeled_patients.csv"
     )
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
 
@@ -147,13 +144,17 @@ if __name__ == "__main__":
     else:
         num_patients = None
 
-    labeled_patients = labeler.apply(
-        path_to_patient_database=PATH_TO_PATIENT_DATABASE,
-        num_threads=NUM_THREADS,
-        num_patients=num_patients,
-    )
+    if False:
+        labeled_patients = labeler.apply(
+            path_to_patient_database=PATH_TO_PATIENT_DATABASE,
+            num_threads=NUM_THREADS,
+            num_patients=num_patients,
+        )
+        labeled_patients.save(PATH_TO_SAVE_LABELED_PATIENTS)
+    else:
+        labeled_patients = femr.labelers.load_labeled_patients(
+                PATH_TO_SAVE_LABELED_PATIENTS)
 
-    labeled_patients.save(PATH_TO_SAVE_LABELED_PATIENTS)
     logger.info("Finish | Label patients")
     logger.info(
         "LabeledPatient stats:\n"
@@ -170,37 +171,18 @@ if __name__ == "__main__":
 
     print(label_values.dtype)
 
-    random_numbers = np.random.random(size=(len(label_pids),))
-
-    mask = np.logical_or(random_numbers < (total_censored_to_sample / total_censored), label_values[:, 1] == 0)
-
-    sampled_label_pids = label_pids[mask]
-    sampled_label_values = label_values[mask, :]
-    sampled_label_times = label_times[mask]
-
-    subsampled = femr.labelers.LabeledPatients.load_from_numpy(sampled_label_pids, sampled_label_values, sampled_label_times, "survival")
-
-    subsampled.save(PATH_TO_SAVE_SUBSAMPLE_LABELED_PATIENTS)
-    logger.info("Finish | Subsampled label patients")
-    logger.info(
-        "Subsampled LabeledPatient stats:\n"
-        f"Total # of patients = {subsampled.get_num_patients()}\n"
-        f"Total # of labels = {subsampled.get_num_labels()}\n"
-        f"Total # of uncensored = {np.sum(1 - subsampled.as_numpy_arrays()[1][:, 1])}"
-    )
-
     logger.info("Convert to binary")
 
-    within_time_range = sampled_label_values[:, 0] <= 365 * 24 * 60
-    is_censor = sampled_label_values[:, 1] == 1
+    within_time_range = label_values[:, 0] <= 365 * 24 * 60
+    is_censor = label_values[:, 1] == 1
 
     mask = ~np.logical_and(is_censor, within_time_range)
 
     is_true = np.logical_and(~is_censor, within_time_range)
     
-    binary_label_pids = sampled_label_pids[mask]
+    binary_label_pids = label_pids[mask]
     binary_label_values = is_true[mask]
-    binary_label_times = sampled_label_times[mask]
+    binary_label_times = label_times[mask]
 
     binary = femr.labelers.LabeledPatients.load_from_numpy(binary_label_pids, binary_label_values, binary_label_times, "boolean")
 
