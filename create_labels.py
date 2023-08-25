@@ -33,7 +33,7 @@ class PSCSurvivalLabeler(femr.labelers.Labeler):
             if first_history is None and (event.start - birth_date) > datetime.timedelta(days=10):
                 first_history = event.start
             
-            if event.omop_table == 'condition_occurrence' and event.source_code == 'K83.01':
+            if first_code is None and (event.omop_table == 'condition_occurrence' and event.source_code == 'K83.01'):
                 first_code = event.start
 
             if event.omop_table == 'condition_occurrence' and (

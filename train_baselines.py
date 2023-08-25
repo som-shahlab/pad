@@ -22,7 +22,8 @@ XGB_PARAMS = {
     "max_depth": [3, 6, -1],
     "learning_rate": [0.02, 0.1, 0.5],
     "num_leaves": [10, 25, 100],
-    "verbose": [-1],
+    "verbose": [0],
+    "n_jobs": [4],
 }
 
 LR_PARAMS = {
